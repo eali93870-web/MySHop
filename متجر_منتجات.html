@@ -1,0 +1,211 @@
+<!--
+صفحة ويب واحدة لعرض منتجات وشراء بسيط.
+كيفية الاستخدام:
+1) احفظ المحتوى كملف HTML مثل shop.html
+2) افتحه في المتصفح.
+3) لتعديل المنتجات عدل مصفوفة "products" داخل سكربت الـ JavaScript.
+
+الميزات:
+- عرض شبكة منتجات
+- سلة تسوق بسيطة (إضافة، إزالة، تغيير كمية)
+- تخزين السلة في localStorage
+- تصميم متجاوب بدون مكتبات خارجية
+-->
+
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>متجر منتجات بسيط</title>
+  <style>
+    :root{--accent:#0b72ff;--muted:#666}
+    *{box-sizing:border-box;font-family:system-ui,Segoe UI,Roboto,'Noto Sans Arabic',sans-serif}
+    body{margin:0;padding:0;background:#f6f7fb;color:#111}
+    header{background:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .brand{font-weight:700}
+    .search{max-width:420px;flex:1;margin:0 20px}
+    .search input{width:100%;padding:8px 12px;border:1px solid #e3e6ee;border-radius:8px}
+    main{display:grid;grid-template-columns:1fr 320px;gap:20px;padding:20px;align-items:start}
+    /* منتجات */
+    .products{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+    .card{background:#fff;border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(10,20,40,.06);display:flex;flex-direction:column}
+    .thumb{height:140px;border-radius:8px;overflow:hidden;background:#eee;display:flex;align-items:center;justify-content:center}
+    .thumb img{max-width:100%;max-height:100%;object-fit:contain}
+    .title{font-weight:600;margin:10px 0 6px}
+    .desc{color:var(--muted);font-size:13px;margin-bottom:8px}
+    .row{display:flex;gap:8px;align-items:center}
+    .price{font-weight:700}
+    .btn{border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-ghost{background:transparent;border:1px solid #e6e9f2}
+    /* سلة الشراء */
+    .cart{background:#fff;border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(10,20,40,.06);position:sticky;top:20px;height:fit-content}
+    .cart h3{margin:0 0 8px}
+    .cart-list{display:flex;flex-direction:column;gap:10px;max-height:380px;overflow:auto;padding-right:6px}
+    .cart-item{display:flex;gap:10px;align-items:center}
+    .cart-item img{width:56px;height:56px;border-radius:8px;object-fit:cover}
+    .qty{display:flex;gap:6px;align-items:center}
+    .total{font-weight:800;font-size:18px;margin-top:12px}
+    .empty{color:var(--muted);padding:14px 0}
+    footer{padding:12px 20px;text-align:center;color:var(--muted);font-size:13px}
+    @media (max-width:900px){main{grid-template-columns:1fr} .cart{position:static;margin-top:12px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">متجر تجريبي</div>
+    <div class="search"><input id="q" placeholder="ابحث عن منتج" aria-label="بحث"></div>
+    <div class="actions">
+      <button id="clearStorage" class="btn btn-ghost">مسح الحفظ</button>
+      <button id="openCart" class="btn btn-primary">عرض السلة (<span id="cartCount">0</span>)</button>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="products" id="products"></div>
+    </section>
+
+    <aside class="cart" id="cart">
+      <h3>سلة الشراء</h3>
+      <div class="cart-list" id="cartList"></div>
+      <div class="total">الإجمالي: <span id="totalPrice">0</span> ج.م</div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button id="checkout" class="btn btn-primary">إتمام الشراء</button>
+        <button id="emptyCart" class="btn btn-ghost">إفراغ السلة</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>صُنع للعرض والتجربة. عدّل المنتجات في سكربت الصفحة.</footer>
+
+  <script>
+    // بيانات منتجات افتراضية. عدّل أو جلب من API خارجي.
+    const products = [
+      {id:1,title:'حذاء رياضي',price:850,desc:'مقاس مختلف وجودة عالية',img:'https://via.placeholder.com/300x200?text=حذاء'},
+      {id:2,title:'ساعة يد',price:1200,desc:'مظهر أنيق ومتانة عالية',img:'https://via.placeholder.com/300x200?text=ساعة'},
+      {id:3,title:'سمّاعة بلوتوث',price:450,desc:'صوت واضح وعازل للضوضاء',img:'https://via.placeholder.com/300x200?text=سماعة'},
+      {id:4,title:'قميص قطن',price:299,desc:'قماش مريح ومقاسات متعددة',img:'https://via.placeholder.com/300x200?text=قميص'},
+      {id:5,title:'حقيبة ظهر',price:640,desc:'مساحة واسعة ومقاومة للماء',img:'https://via.placeholder.com/300x200?text=حقيبة'},
+      {id:6,title:'نظارة شمس',price:210,desc:'حماية من الأشعة مع تصميم عصري',img:'https://via.placeholder.com/300x200?text=نظارة'}
+    ];
+
+    // حالة السلة
+    let cart = JSON.parse(localStorage.getItem('cart_v1')||'{}');
+
+    const productsEl = document.getElementById('products');
+    const cartListEl = document.getElementById('cartList');
+    const totalPriceEl = document.getElementById('totalPrice');
+    const cartCountEl = document.getElementById('cartCount');
+    const qEl = document.getElementById('q');
+
+    function renderProducts(filter=''){
+      productsEl.innerHTML = '';
+      const f = filter.trim().toLowerCase();
+      const shown = products.filter(p=>p.title.toLowerCase().includes(f) || p.desc.toLowerCase().includes(f));
+      shown.forEach(p=>{
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="thumb"><img src="${p.img}" alt="${p.title}"></div>
+          <div class="title">${p.title}</div>
+          <div class="desc">${p.desc}</div>
+          <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center">
+            <div class="price">${p.price} ج.م</div>
+            <div>
+              <button class="btn btn-ghost" data-id="${p.id}">عرض</button>
+              <button class="btn btn-primary" data-add="${p.id}">أضف للسلة</button>
+            </div>
+          </div>
+        `;
+        productsEl.appendChild(card);
+      });
+    }
+
+    function saveCart(){
+      localStorage.setItem('cart_v1', JSON.stringify(cart));
+      renderCart();
+    }
+
+    function addToCart(id, qty=1){
+      const key = String(id);
+      if(cart[key]) cart[key].qty += qty; else {
+        const prod = products.find(p=>p.id===id);
+        cart[key] = {id:prod.id,title:prod.title,price:prod.price,img:prod.img,qty:qty};
+      }
+      saveCart();
+    }
+
+    function removeFromCart(id){
+      delete cart[String(id)];
+      saveCart();
+    }
+
+    function changeQty(id, qty){
+      if(qty<=0){ removeFromCart(id); return; }
+      cart[String(id)].qty = qty;
+      saveCart();
+    }
+
+    function renderCart(){
+      cartListEl.innerHTML = '';
+      const keys = Object.keys(cart);
+      if(keys.length===0){cartListEl.innerHTML = '<div class="empty">السلة فارغة</div>'; totalPriceEl.textContent='0'; cartCountEl.textContent='0'; return}
+      let total=0, count=0;
+      keys.forEach(k=>{
+        const it = cart[k];
+        total += it.price * it.qty;
+        count += it.qty;
+        const div = document.createElement('div');
+        div.className = 'cart-item';
+        div.innerHTML = `
+          <img src="${it.img}" alt="${it.title}">
+          <div style="flex:1">
+            <div style="font-weight:700">${it.title}</div>
+            <div style="color:var(--muted);font-size:13px">${it.price} ج.م</div>
+          </div>
+          <div class="qty">
+            <button class="btn btn-ghost" data-decr="${it.id}">-</button>
+            <div>${it.qty}</div>
+            <button class="btn btn-ghost" data-incr="${it.id}">+</button>
+            <button class="btn" data-remove="${it.id}" title="حذف">✖</button>
+          </div>
+        `;
+        cartListEl.appendChild(div);
+      });
+      totalPriceEl.textContent = total.toLocaleString();
+      cartCountEl.textContent = count;
+    }
+
+    // أحداث عامة
+    document.addEventListener('click', (e)=>{
+      const add = e.target.closest('[data-add]');
+      if(add){ addToCart(Number(add.getAttribute('data-add')),1); return }
+      const decr = e.target.closest('[data-decr]');
+      if(decr){ const id=Number(decr.getAttribute('data-decr')); changeQty(id, cart[id].qty-1); return }
+      const incr = e.target.closest('[data-incr]');
+      if(incr){ const id=Number(incr.getAttribute('data-incr')); changeQty(id, cart[id].qty+1); return }
+      const rem = e.target.closest('[data-remove]');
+      if(rem){ removeFromCart(Number(rem.getAttribute('data-remove'))); return }
+      const show = e.target.closest('[data-id]');
+      if(show){ alert('تفاصيل المنتج:\n'+ products.find(p=>p.id==show.getAttribute('data-id')).title); return }
+    });
+
+    document.getElementById('emptyCart').addEventListener('click', ()=>{ cart = {}; saveCart(); });
+    document.getElementById('clearStorage').addEventListener('click', ()=>{ localStorage.removeItem('cart_v1'); cart={}; renderCart(); });
+    document.getElementById('checkout').addEventListener('click', ()=>{
+      if(Object.keys(cart).length===0){ alert('السلة فارغة'); return }
+      // هنا ضع تكامل مع خدمة الدفع أو صفحة طلب
+      alert('تم إرسال طلبك تجريبياً. إجمالي السعر: '+ totalPriceEl.textContent + ' ج.م');
+      cart={}; saveCart();
+    });
+
+    qEl.addEventListener('input', (e)=> renderProducts(e.target.value));
+
+    // رندر أولي
+    renderProducts();
+    renderCart();
+  </script>
+</body>
+</html>
